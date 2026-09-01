@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&hourly=precipitation_probability&date=${date}`;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&hourly=precipitation_probability,temperature_2m&date=${date}`;
 
     const response = await fetch(url);
     const data = await response.json();
@@ -29,8 +29,11 @@ export async function GET(request: NextRequest) {
     const hourlyData = data.hourly.time.map((time: string, idx: number) => ({
       time,
       precipitation_probability: data.hourly.precipitation_probability[idx],
+      temperature: data.hourly.temperature_2m[idx],
       willRain: data.hourly.precipitation_probability[idx] > 30,
     }));
+
+    const currentTemp = hourlyData[0]?.temperature || 0;
 
     return NextResponse.json({
       latitude: data.latitude,
@@ -38,6 +41,7 @@ export async function GET(request: NextRequest) {
       timezone: data.timezone,
       date,
       hourly: hourlyData,
+      currentTemp,
       nextRainTime: hourlyData.find((h: any) => h.willRain)?.time || null,
     });
   } catch (error) {

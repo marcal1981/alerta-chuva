@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 interface RouteData {
   distance: number;
@@ -11,6 +12,7 @@ interface RouteData {
 interface ForecastData {
   time: string;
   precipitation_probability: number;
+  temperature: number;
   willRain: boolean;
 }
 
@@ -31,6 +33,7 @@ interface RouteInfo {
   bestTime: string;
   points: RoutePoint[];
   temp: number;
+  currentTemp: number;
 }
 
 export default function Home() {
@@ -61,11 +64,11 @@ export default function Home() {
         `/api/forecast?latitude=${lat}&longitude=${lng}`
       );
       if (!forecastRes.ok) throw new Error('Erro ao buscar previsão');
-      const forecast = await forecastRes.json();
+      const forecastData = await forecastRes.json();
 
       // Filtrar apenas horários futuros
       const now = new Date();
-      const futureHourly = forecast.hourly.filter((h: ForecastData) => {
+      const futureHourly = forecastData.hourly.filter((h: ForecastData) => {
         const hourTime = new Date(h.time);
         return hourTime > now;
       });
@@ -127,6 +130,7 @@ export default function Home() {
         }),
         points,
         temp: 24.6,
+        currentTemp: forecastData.currentTemp,
       });
     } catch (err) {
       setError(String(err));
@@ -284,7 +288,7 @@ export default function Home() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-slate-800 bg-opacity-50 rounded p-4 border border-slate-600">
                   <p className="text-gray-400 text-sm">🌡️ Temperatura Atual</p>
-                  <p className="text-3xl font-bold text-white">{routeInfo.temp}°C</p>
+                  <p className="text-3xl font-bold text-white">{routeInfo.currentTemp.toFixed(1)}°C</p>
                 </div>
                 <div className="bg-slate-800 bg-opacity-50 rounded p-4 border border-slate-600">
                   <p className="text-gray-400 text-sm">⏰ Melhor Horário para Viajar</p>
@@ -337,26 +341,59 @@ export default function Home() {
             {/* Previsão por hora */}
             <div className="bg-slate-700 rounded-lg shadow-2xl p-6 border border-slate-600">
               <h3 className="text-2xl font-bold text-white mb-6">📊 Previsão por Hora (Próximas 24h)</h3>
-              <div className="grid grid-cols-3 md:grid-cols-6 lg:grid-cols-12 gap-2 max-h-48 overflow-y-auto">
-                {routeInfo.forecast.map((hour, idx) => (
-                  <div
-                    key={idx}
-                    className={`p-2 rounded text-center text-xs ${
-                      hour.willRain
-                        ? 'bg-red-900 border-2 border-red-500 text-red-100'
-                        : 'bg-green-900 border-2 border-green-600 text-green-100'
-                    }`}
-                  >
-                    <p className="font-bold mb-1">
-                      {new Date(hour.time).toLocaleTimeString('pt-BR', {
+              <div className="w-full h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={routeInfo.forecast}>
+                    <defs>
+                      <linearGradient id="colorPrecip" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#ef4444" stopOpacity={0.8}/>
+                        <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#475569" />
+                    <XAxis
+                      dataKey="time"
+                      stroke="#94a3b8"
+                      tickFormatter={(time) => new Date(time).toLocaleTimeString('pt-BR', {
                         hour: '2-digit',
                         minute: '2-digit',
                       })}
-                    </p>
-                    <p className="text-base font-bold">{hour.precipitation_probability}%</p>
-                    <p className="text-lg">{hour.willRain ? '🌧️' : '☀️'}</p>
-                  </div>
-                ))}
+                      tick={{ fontSize: 12 }}
+                      angle={-45}
+                      textAnchor="end"
+                      height={70}
+                    />
+                    <YAxis
+                      stroke="#94a3b8"
+                      label={{ value: 'Chance de Chuva (%)', angle: -90, position: 'insideLeft' }}
+                      tick={{ fontSize: 12 }}
+                      domain={[0, 100]}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: '#1e293b',
+                        border: '2px solid #475569',
+                        borderRadius: '8px',
+                        color: '#fff',
+                      }}
+                      formatter={(value: any) => [`${value}%`, 'Chance de Chuva']}
+                      labelFormatter={(label) => {
+                        return `Horário: ${new Date(label).toLocaleTimeString('pt-BR', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}`;
+                      }}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="precipitation_probability"
+                      stroke="#ef4444"
+                      strokeWidth={2}
+                      fillOpacity={1}
+                      fill="url(#colorPrecip)"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
               </div>
             </div>
 
