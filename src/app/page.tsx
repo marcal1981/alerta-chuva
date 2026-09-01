@@ -53,11 +53,17 @@ export default function Home() {
       const originCoords = await geocodeAddress(origin);
       const destCoords = await geocodeAddress(destination);
 
-      const routeRes = await fetch(
-        `/api/routes?from=${originCoords}&to=${destCoords}`
-      );
-      if (!routeRes.ok) throw new Error('Erro ao calcular rota');
-      const route: RouteData = await routeRes.json();
+      let route: RouteData = { distance: 0, duration: 0, geometry: null };
+      try {
+        const routeRes = await fetch(
+          `/api/routes?from=${originCoords}&to=${destCoords}`
+        );
+        if (routeRes.ok) {
+          route = await routeRes.json();
+        }
+      } catch (err) {
+        console.error('Erro ao calcular rota:', err);
+      }
 
       const [lat, lng] = originCoords.split(',');
       const forecastRes = await fetch(
