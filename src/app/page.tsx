@@ -145,17 +145,33 @@ export default function Home() {
     }
   };
 
+  const removeAccents = (str: string): string => {
+    return str.normalize('NFD').replace(/[̀-ͯ]/g, '');
+  };
+
   const geocodeAddress = async (address: string): Promise<string> => {
     const examples: { [key: string]: string } = {
       'são paulo': '-23.5505,-46.6333',
+      'sao paulo': '-23.5505,-46.6333',
       'sjc': '-23.2237,-45.9011',
+      'são josé dos campos': '-23.2237,-45.9011',
+      'sao jose dos campos': '-23.2237,-45.9011',
+      'ilhabela': '-23.8633,-45.3562',
       'illhabela': '-23.8633,-45.3562',
       'campinas': '-22.9068,-47.4616',
       'sorocaba': '-23.5006,-47.4779',
+      'joão pessoa': '-7.1084,-34.8305',
+      'joao pessoa': '-7.1084,-34.8305',
+      'paraíba': '-7.1084,-34.8305',
+      'paraiba': '-7.1084,-34.8305',
     };
 
-    const key = address.toLowerCase();
-    for (const [city, coords] of Object.entries(examples)) {
+    const key = removeAccents(address.toLowerCase());
+    const normalizedExamples = Object.fromEntries(
+      Object.entries(examples).map(([city, coords]) => [removeAccents(city), coords])
+    );
+
+    for (const [city, coords] of Object.entries(normalizedExamples)) {
       if (key.includes(city)) return coords;
     }
 
