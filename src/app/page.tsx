@@ -200,10 +200,13 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
       <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="text-center mb-8 mt-4">
-          <h1 className="text-5xl font-bold text-white mb-2">🏍️ Rota Segura</h1>
-          <p className="text-gray-400">Análise de clima em tempo real para sua jornada</p>
+        {/* Header com moto à direita */}
+        <div className="flex items-center justify-between mb-8 mt-4">
+          <div className="text-left">
+            <h1 className="text-5xl font-bold text-white">Rota Segura</h1>
+            <p className="text-gray-400">Análise de clima em tempo real para sua jornada</p>
+          </div>
+          <div className="text-8xl">🏍️</div>
         </div>
 
         {/* Formulário de busca */}
