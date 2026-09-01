@@ -340,7 +340,7 @@ export default function Home() {
 
             {/* Previsão por hora */}
             <div className="bg-slate-700 rounded-lg shadow-2xl p-6 border border-slate-600">
-              <h3 className="text-2xl font-bold text-white mb-6">📊 Previsão por Hora (Próximas 24h)</h3>
+              <h3 className="text-2xl font-bold text-white mb-6">📊 Previsão por Hora (Próximos 5 Dias)</h3>
               <div className="w-full h-80">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={routeInfo.forecast.map((d: ForecastData, idx: number) => ({

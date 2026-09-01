@@ -14,7 +14,9 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&hourly=precipitation_probability,temperature_2m&date=${date}`;
+    // Para pegar 5 dias, não especificamos date (retorna automaticamente os próximos dias)
+    // ou podemos especificar start_date e end_date
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&hourly=precipitation_probability,temperature_2m`;
 
     const response = await fetch(url);
     const data = await response.json();
