@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Label } from 'recharts';
 
 interface RouteData {
   distance: number;
@@ -343,25 +343,47 @@ export default function Home() {
               <h3 className="text-2xl font-bold text-white mb-6">📊 Previsão por Hora (Próximas 24h)</h3>
               <div className="w-full h-80">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={routeInfo.forecast}>
+                  <AreaChart data={routeInfo.forecast.map((d: ForecastData, idx: number) => ({
+                    ...d,
+                    displayDate: new Date(d.time).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+                  }))}>
                     <defs>
                       <linearGradient id="colorPrecip" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#ef4444" stopOpacity={0.8}/>
                         <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#475569" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#475569" vertical={false} />
+                    {/* Adicionar linhas de separação entre dias */}
+                    {routeInfo.forecast.map((d: ForecastData, idx: number) => {
+                      const date = new Date(d.time);
+                      if (date.getHours() === 0 && idx > 0) {
+                        return <ReferenceLine key={idx} x={d.time} stroke="#64748b" strokeDasharray="5 5" />;
+                      }
+                      return null;
+                    })}
                     <XAxis
                       dataKey="time"
                       stroke="#94a3b8"
-                      tickFormatter={(time) => new Date(time).toLocaleTimeString('pt-BR', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                      tick={{ fontSize: 12 }}
+                      tick={{ fontSize: 11, fill: '#cbd5e1' }}
                       angle={-45}
                       textAnchor="end"
-                      height={70}
+                      height={80}
+                      tickFormatter={(time) => {
+                        const date = new Date(time);
+                        const hour = date.toLocaleTimeString('pt-BR', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          hour12: false,
+                        });
+                        // Mostrar data a cada 6 horas para não ficar muito poluído
+                        const minutes = date.getHours() % 6 === 0 ? date.getMinutes() : 0;
+                        if (minutes === 0 && date.getHours() % 6 === 0) {
+                          const day = date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+                          return `${day}\n${hour}`;
+                        }
+                        return hour;
+                      }}
                     />
                     <YAxis
                       stroke="#94a3b8"
@@ -375,13 +397,24 @@ export default function Home() {
                         border: '2px solid #475569',
                         borderRadius: '8px',
                         color: '#fff',
+                        padding: '12px',
                       }}
-                      formatter={(value: any) => [`${value}%`, 'Chance de Chuva']}
+                      formatter={(value: any) => {
+                        if (value > 50) return [`${value}% 🌧️ Chuva forte`, 'Precipitação'];
+                        if (value > 30) return [`${value}% 🌧️ Chuva`, 'Precipitação'];
+                        if (value > 20) return [`${value}% 💧 Possível chuva`, 'Precipitação'];
+                        if (value > 0) return [`${value}% ☁️ Pequena chance`, 'Precipitação'];
+                        return [`${value}% ☀️ Sem chuva`, 'Precipitação'];
+                      }}
                       labelFormatter={(label) => {
-                        return `Horário: ${new Date(label).toLocaleTimeString('pt-BR', {
+                        const date = new Date(label);
+                        const day = date.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
+                        const time = date.toLocaleTimeString('pt-BR', {
                           hour: '2-digit',
                           minute: '2-digit',
-                        })}`;
+                          hour12: false,
+                        });
+                        return `${day} às ${time}`;
                       }}
                     />
                     <Area
