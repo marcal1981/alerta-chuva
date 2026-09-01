@@ -50,35 +50,21 @@ export default function Home() {
     setRouteInfo(null);
 
     try {
-      // Usar novo endpoint de análise que faz tudo
-      const today = new Date().toISOString().split('T')[0];
-      const analysisRes = await fetch('/api/analyze-route', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          origin,
-          destination,
-          date: today,
-          available_period_start: '06:00',
-          available_period_end: '20:00',
-        }),
-      });
-
-      if (!analysisRes.ok) throw new Error('Erro ao analisar rota');
-      const analysis = await analysisRes.json();
-
-      // Pegar dados da rota e previsão como antes
       const originCoords = await geocodeAddress(origin);
+      const destCoords = await geocodeAddress(destination);
+
+      const routeRes = await fetch(
+        `/api/routes?from=${originCoords}&to=${destCoords}`
+      );
+      if (!routeRes.ok) throw new Error('Erro ao calcular rota');
+      const route: RouteData = await routeRes.json();
+
       const [lat, lng] = originCoords.split(',');
       const forecastRes = await fetch(
         `/api/forecast?latitude=${lat}&longitude=${lng}`
       );
       if (!forecastRes.ok) throw new Error('Erro ao buscar previsão');
       const forecastData = await forecastRes.json();
-      const route = {
-        distance: analysis.route_info.distance_km,
-        duration: analysis.route_info.duration_minutes,
-      };
 
       // Filtrar apenas horários futuros
       const now = new Date();
@@ -91,9 +77,23 @@ export default function Home() {
         throw new Error('Nenhum horário futuro disponível para análise');
       }
 
-      // Usar recomendação do Risk Engine
-      const recommendation = analysis.recommendation;
-      const riskLevel = recommendation.risk_level as 'baixo' | 'moderado' | 'alto' | 'critico';
+      // Calcular nível de risco
+      const rainyHours = futureHourly.filter(
+        (h: ForecastData) => h.precipitation_probability > 30
+      ).length;
+      const totalHours = futureHourly.length;
+      const rainPercentage = (rainyHours / totalHours) * 100;
+
+      let riskLevel: 'baixo' | 'moderado' | 'alto' | 'critico';
+      if (rainPercentage === 0) riskLevel = 'baixo';
+      else if (rainPercentage < 30) riskLevel = 'moderado';
+      else if (rainPercentage < 70) riskLevel = 'alto';
+      else riskLevel = 'critico';
+
+      // Encontrar melhor horário (sem chuva) - apenas futuros
+      const bestHour = futureHourly.find(
+        (h: ForecastData) => !h.willRain
+      ) || futureHourly[0];
 
       // Simular pontos da rota
       const points: RoutePoint[] = [
@@ -124,7 +124,10 @@ export default function Home() {
         duration: `${route.duration} min`,
         forecast: futureHourly,
         riskLevel,
-        bestTime: recommendation.best_time,
+        bestTime: new Date(bestHour.time).toLocaleTimeString('pt-BR', {
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
         points,
         temp: 24.6,
         currentTemp: forecastData.currentTemp,
