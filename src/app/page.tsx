@@ -421,7 +421,7 @@ export default function Home() {
               </div>
 
               {/* Informações de temperatura e melhor horário */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-4 mb-4">
                 <div className="bg-slate-800 bg-opacity-50 rounded p-4 border border-slate-600">
                   <p className="text-gray-400 text-sm">🌡️ Temperatura Atual</p>
                   <p className="text-3xl font-bold text-white">{routeInfo.currentTemp.toFixed(1)}°C</p>
@@ -431,12 +431,39 @@ export default function Home() {
                   <p className="text-3xl font-bold text-green-400">{routeInfo.bestTime}</p>
                 </div>
               </div>
+
+              {/* Recomendação Inteligente baseada na análise de rota */}
+              {routeAnalysis && routeAnalysis.riskAnalysis && (
+                <div className={`rounded-lg p-4 border-l-4 ${
+                  routeAnalysis.riskAnalysis.overallRiskLevel === 'baixo'
+                    ? 'border-green-500 bg-green-900 bg-opacity-20'
+                    : routeAnalysis.riskAnalysis.overallRiskLevel === 'moderado'
+                      ? 'border-yellow-500 bg-yellow-900 bg-opacity-20'
+                      : 'border-red-500 bg-red-900 bg-opacity-20'
+                }`}>
+                  <p className="text-gray-300 text-sm font-semibold mb-2">💡 Recomendação Inteligente (Baseada em Toda a Rota)</p>
+                  {routeAnalysis.riskAnalysis.safestTimeRange ? (
+                    <p className="text-white font-bold">
+                      ✅ Saia entre <span className="text-green-300">{routeAnalysis.riskAnalysis.safestTimeRange}</span> para evitar chuva em TODA a rota
+                    </p>
+                  ) : (
+                    <p className="text-white font-bold">
+                      ⚠️ Há risco de chuva em algum ponto da rota
+                    </p>
+                  )}
+                  {routeAnalysis.riskAnalysis.highestRiskPeriod && (
+                    <p className="text-gray-300 text-sm mt-2">
+                      ❌ Evite sair entre {routeAnalysis.riskAnalysis.highestRiskPeriod} (maior chance de chuva)
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
 
-            {/* Previsão por hora */}
+            {/* Previsão por hora com marcação de pontos da rota */}
             <div className="bg-slate-700 rounded-lg shadow-2xl p-6 border border-slate-600">
-              <h3 className="text-2xl font-bold text-white mb-6">📊 Previsão por Hora (Próximos 2 Dias)</h3>
-              <div className="w-full h-80">
+              <h3 className="text-2xl font-bold text-white mb-6">📊 Previsão por Hora (Próximos 2 Dias) + Rota</h3>
+              <div className="w-full h-96">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={routeInfo.forecast.map((d: ForecastData, idx: number) => ({
                     ...d,
@@ -449,11 +476,44 @@ export default function Home() {
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="#475569" vertical={false} />
-                    {/* Adicionar linhas de separação entre dias */}
+
+                    {/* Linhas de separação entre dias */}
                     {routeInfo.forecast.map((d: ForecastData, idx: number) => {
                       const date = new Date(d.time);
                       if (date.getHours() === 0 && idx > 0) {
                         return <ReferenceLine key={idx} x={d.time} stroke="#64748b" strokeDasharray="5 5" />;
+                      }
+                      return null;
+                    })}
+
+                    {/* Linhas mostrando quando você passa em cada ponto da rota */}
+                    {routeAnalysis && routeAnalysis.points && routeAnalysis.points.slice(0, 5).map((point: any, idx: number) => {
+                      const pointTime = new Date();
+                      const [arrivalHour, arrivalMinute] = point.estimatedArrivalTime.split(':').map(Number);
+                      pointTime.setHours(arrivalHour, arrivalMinute, 0);
+
+                      // Verificar se essa hora está dentro do forecast
+                      const isInForecast = routeInfo.forecast.some((f: ForecastData) => {
+                        const fTime = new Date(f.time);
+                        return Math.abs(fTime.getTime() - pointTime.getTime()) < 60 * 60 * 1000; // dentro de 1 hora
+                      });
+
+                      if (isInForecast) {
+                        return (
+                          <ReferenceLine
+                            key={`point-${idx}`}
+                            x={pointTime.toISOString()}
+                            stroke="#60a5fa"
+                            strokeDasharray="3 3"
+                            strokeWidth={2}
+                            label={{
+                              value: `📍 ${point.city || `Pt${idx + 1}`} (${point.distance}km)`,
+                              position: 'top',
+                              fill: '#60a5fa',
+                              fontSize: 12,
+                            }}
+                          />
+                        );
                       }
                       return null;
                     })}
