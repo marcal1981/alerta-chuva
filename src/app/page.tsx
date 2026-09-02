@@ -72,11 +72,12 @@ export default function Home() {
       if (!forecastRes.ok) throw new Error('Erro ao buscar previsão');
       const forecastData = await forecastRes.json();
 
-      // Filtrar apenas horários futuros
+      // Filtrar apenas horários futuros (próximos 3 dias)
       const now = new Date();
+      const threeDaysFromNow = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
       const futureHourly = forecastData.hourly.filter((h: ForecastData) => {
         const hourTime = new Date(h.time);
-        return hourTime > now;
+        return hourTime > now && hourTime <= threeDaysFromNow;
       });
 
       if (futureHourly.length === 0) {
@@ -321,7 +322,7 @@ export default function Home() {
 
             {/* Previsão por hora */}
             <div className="bg-slate-700 rounded-lg shadow-2xl p-6 border border-slate-600">
-              <h3 className="text-2xl font-bold text-white mb-6">📊 Previsão por Hora (Próximos 5 Dias)</h3>
+              <h3 className="text-2xl font-bold text-white mb-6">📊 Previsão por Hora (Próximos 3 Dias)</h3>
               <div className="w-full h-80">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={routeInfo.forecast.map((d: ForecastData, idx: number) => ({
