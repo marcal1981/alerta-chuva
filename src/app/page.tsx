@@ -138,12 +138,12 @@ export default function Home() {
       if (!forecastRes.ok) throw new Error('Erro ao buscar previsão');
       const forecastData = await forecastRes.json();
 
-      // Filtrar apenas horários futuros (próximos 2 dias)
+      // Filtrar apenas horários futuros (próximas 12 horas)
       const now = new Date();
-      const twoDaysFromNow = new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000);
+      const twelveHoursFromNow = new Date(now.getTime() + 12 * 60 * 60 * 1000);
       const futureHourly = forecastData.hourly.filter((h: ForecastData) => {
         const hourTime = new Date(h.time);
-        return hourTime > now && hourTime <= twoDaysFromNow;
+        return hourTime > now && hourTime <= twelveHoursFromNow;
       });
 
       if (futureHourly.length === 0) {
@@ -436,10 +436,10 @@ export default function Home() {
               {routeAnalysis && routeAnalysis.riskAnalysis && (
                 <div className={`rounded-lg p-4 border-l-4 ${
                   routeAnalysis.riskAnalysis.overallRiskLevel === 'baixo'
-                    ? 'border-green-500 bg-green-900 bg-opacity-20'
+                    ? 'border-green-500 bg-slate-800 bg-opacity-80'
                     : routeAnalysis.riskAnalysis.overallRiskLevel === 'moderado'
-                      ? 'border-yellow-500 bg-yellow-900 bg-opacity-20'
-                      : 'border-red-500 bg-red-900 bg-opacity-20'
+                      ? 'border-yellow-500 bg-slate-800 bg-opacity-80'
+                      : 'border-red-500 bg-slate-800 bg-opacity-80'
                 }`}>
                   <p className="text-gray-300 text-sm font-semibold mb-2">💡 Recomendação Inteligente (Baseada em Toda a Rota)</p>
                   {routeAnalysis.riskAnalysis.safestTimeRange ? (
@@ -462,7 +462,7 @@ export default function Home() {
 
             {/* Previsão por hora com marcação de pontos da rota */}
             <div className="bg-slate-700 rounded-lg shadow-2xl p-6 border border-slate-600">
-              <h3 className="text-2xl font-bold text-white mb-6">📊 Previsão por Hora (Próximos 2 Dias) + Rota</h3>
+              <h3 className="text-2xl font-bold text-white mb-6">📊 Previsão por Hora (Próximos 12 hs) + Rota</h3>
               <div className="w-full h-96">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={routeInfo.forecast.map((d: ForecastData, idx: number) => ({
