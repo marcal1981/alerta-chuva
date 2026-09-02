@@ -71,6 +71,7 @@ export default function Home() {
   const [destinationSuggestions, setDestinationSuggestions] = useState<City[]>([]);
   const [selectedOriginCity, setSelectedOriginCity] = useState<City | null>(null);
   const [selectedDestinationCity, setSelectedDestinationCity] = useState<City | null>(null);
+  const [routeAnalysis, setRouteAnalysis] = useState<any>(null);
 
   const handleOriginChange = (value: string) => {
     setOrigin(value);
@@ -210,6 +211,19 @@ export default function Home() {
         temp: 24.6,
         currentTemp: forecastData.currentTemp,
       });
+
+      // Buscar análise detalhada da rota (pontos intermediários)
+      try {
+        const analysisRes = await fetch(
+          `/api/route-analysis?from=${originCoords}&to=${destCoords}&departure_time=${new Date().toISOString()}`
+        );
+        if (analysisRes.ok) {
+          const analysis = await analysisRes.json();
+          setRouteAnalysis(analysis);
+        }
+      } catch (err) {
+        console.error('Erro ao buscar análise de rota:', err);
+      }
     } catch (err) {
       setError(String(err));
     } finally {
@@ -511,9 +525,75 @@ export default function Home() {
               </div>
             </div>
 
+            {/* Análise detalhada da rota (pontos intermediários) */}
+            {routeAnalysis && routeAnalysis.points && routeAnalysis.points.length > 0 && (
+              <div className="bg-slate-700 rounded-lg shadow-2xl p-6 border border-slate-600">
+                <h3 className="text-2xl font-bold text-white mb-6">🛣️ Análise Detalhada da Rota</h3>
+
+                {/* Resumo de Risco */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                  <div className="bg-slate-800 rounded-lg p-4 border border-slate-600">
+                    <p className="text-gray-400 text-sm mb-2">☀️ Melhor Período</p>
+                    <p className="text-white font-bold text-lg">{routeAnalysis.riskAnalysis.safestTimeRange || 'Consultando dados...'}</p>
+                  </div>
+                  <div className="bg-slate-800 rounded-lg p-4 border border-slate-600">
+                    <p className="text-gray-400 text-sm mb-2">🌧️ Período de Maior Risco</p>
+                    <p className="text-white font-bold text-lg">{routeAnalysis.riskAnalysis.highestRiskPeriod || 'Nenhum'}</p>
+                  </div>
+                </div>
+
+                {/* Timeline dos Pontos */}
+                <div className="space-y-3">
+                  {routeAnalysis.points.map((point: any, idx: number) => {
+                    const riskColor = point.weather?.willRain
+                      ? 'border-l-4 border-red-500 bg-red-900 bg-opacity-20'
+                      : 'border-l-4 border-green-500 bg-green-900 bg-opacity-20';
+
+                    return (
+                      <div key={idx} className={`rounded-lg p-4 ${riskColor} flex items-center justify-between`}>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-white font-bold">{point.distance}km</span>
+                            {point.city && (
+                              <span className="text-gray-300">
+                                📍 {point.city}, {point.state}
+                              </span>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-3 gap-4 text-sm">
+                            <div>
+                              <p className="text-gray-400">⏰ ETA</p>
+                              <p className="text-white font-semibold">{point.estimatedArrivalTime}</p>
+                            </div>
+                            {point.weather && (
+                              <>
+                                <div>
+                                  <p className="text-gray-400">🌡️ Temp</p>
+                                  <p className="text-white font-semibold">{point.weather.temp.toFixed(1)}°C</p>
+                                </div>
+                                <div>
+                                  <p className="text-gray-400">💧 Chuva</p>
+                                  <p className={`font-semibold ${point.weather.willRain ? 'text-red-400' : 'text-green-400'}`}>
+                                    {point.weather.precipitation_probability}%
+                                  </p>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-3xl ml-4">
+                          {point.weather?.willRain ? '🌧️' : '☀️'}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Pontos da rota */}
             <div className="bg-slate-700 rounded-lg shadow-2xl p-6 border border-slate-600">
-              <h3 className="text-2xl font-bold text-white mb-6">📍 Pontos da Rota</h3>
+              <h3 className="text-2xl font-bold text-white mb-6">📍 Pontos de Referência</h3>
               <div className="space-y-4">
                 {routeInfo.points.map((point, idx) => (
                   <div
