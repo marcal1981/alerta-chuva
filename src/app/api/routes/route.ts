@@ -14,9 +14,13 @@ async function fetchOSRM(from: string, to: string) {
   }
 
   const route = data.routes[0];
+
+  // Retornar dados reais do OSRM sem aproximações excessivas
+  // distance: em km (com 1 casa decimal)
+  // duration: em segundos (será convertido em minutos no frontend)
   return {
-    distance: route.distance / 1000,
-    duration: Math.round(route.duration / 60),
+    distance: Math.round((route.distance / 1000) * 10) / 10, // 1 casa decimal
+    duration: Math.round(route.duration), // em segundos
     geometry: route.geometry,
     source: 'OSRM',
   };

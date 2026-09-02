@@ -189,11 +189,17 @@ export default function Home() {
         },
       ];
 
+      // Formatar duração como "Xh YYmin" (route.duration vem em segundos do OSRM)
+      const totalMinutes = Math.round(route.duration / 60);
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      const durationFormatted = hours > 0 ? `${hours}h ${minutes}min` : `${minutes}min`;
+
       setRouteInfo({
         origin,
         destination,
         distance: `${(route.distance).toFixed(1)} km`,
-        duration: `${route.duration} min`,
+        duration: durationFormatted,
         forecast: futureHourly,
         riskLevel,
         bestTime: new Date(bestHour.time).toLocaleTimeString('pt-BR', {
