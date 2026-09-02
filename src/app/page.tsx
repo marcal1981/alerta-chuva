@@ -36,12 +36,77 @@ interface RouteInfo {
   currentTemp: number;
 }
 
+interface City {
+  name: string;
+  state: string;
+  coords: string;
+}
+
+const CITIES_DATABASE: City[] = [
+  { name: 'São Paulo', state: 'SP', coords: '-23.5505,-46.6333' },
+  { name: 'São José dos Campos', state: 'SP', coords: '-23.2237,-45.9011' },
+  { name: 'Ilhabela', state: 'SP', coords: '-23.8633,-45.3562' },
+  { name: 'Campinas', state: 'SP', coords: '-22.9068,-47.4616' },
+  { name: 'Sorocaba', state: 'SP', coords: '-23.5006,-47.4779' },
+  { name: 'Ribeirão Preto', state: 'SP', coords: '-21.1758,-47.8102' },
+  { name: 'Santos', state: 'SP', coords: '-23.9608,-46.3304' },
+  { name: 'João Pessoa', state: 'PB', coords: '-7.1084,-34.8305' },
+  { name: 'Feira de Santana', state: 'BA', coords: '-12.2631,-38.9673' },
+  { name: 'Salvador', state: 'BA', coords: '-12.9704,-38.5123' },
+  { name: 'Recife', state: 'PE', coords: '-8.0476,-34.8770' },
+  { name: 'Fortaleza', state: 'CE', coords: '-3.7319,-38.5267' },
+  { name: 'Brasília', state: 'DF', coords: '-15.7939,-47.8822' },
+  { name: 'Belo Horizonte', state: 'MG', coords: '-19.9193,-43.9437' },
+  { name: 'Rio de Janeiro', state: 'RJ', coords: '-22.9068,-43.1729' },
+  { name: 'Curitiba', state: 'PR', coords: '-25.4284,-49.2733' },
+];
+
 export default function Home() {
   const [origin, setOrigin] = useState('');
   const [destination, setDestination] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [routeInfo, setRouteInfo] = useState<RouteInfo | null>(null);
+  const [originSuggestions, setOriginSuggestions] = useState<City[]>([]);
+  const [destinationSuggestions, setDestinationSuggestions] = useState<City[]>([]);
+  const [selectedOriginCity, setSelectedOriginCity] = useState<City | null>(null);
+  const [selectedDestinationCity, setSelectedDestinationCity] = useState<City | null>(null);
+
+  const handleOriginChange = (value: string) => {
+    setOrigin(value);
+    if (value.length > 0) {
+      const filtered = CITIES_DATABASE.filter(city =>
+        `${city.name} - ${city.state}`.toLowerCase().includes(value.toLowerCase())
+      );
+      setOriginSuggestions(filtered);
+    } else {
+      setOriginSuggestions([]);
+    }
+  };
+
+  const handleDestinationChange = (value: string) => {
+    setDestination(value);
+    if (value.length > 0) {
+      const filtered = CITIES_DATABASE.filter(city =>
+        `${city.name} - ${city.state}`.toLowerCase().includes(value.toLowerCase())
+      );
+      setDestinationSuggestions(filtered);
+    } else {
+      setDestinationSuggestions([]);
+    }
+  };
+
+  const selectOriginCity = (city: City) => {
+    setOrigin(`${city.name}, ${city.state}`);
+    setSelectedOriginCity(city);
+    setOriginSuggestions([]);
+  };
+
+  const selectDestinationCity = (city: City) => {
+    setDestination(`${city.name}, ${city.state}`);
+    setSelectedDestinationCity(city);
+    setDestinationSuggestions([]);
+  };
 
   const calculateRoute = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,8 +115,8 @@ export default function Home() {
     setRouteInfo(null);
 
     try {
-      const originCoords = await geocodeAddress(origin);
-      const destCoords = await geocodeAddress(destination);
+      const originCoords = selectedOriginCity?.coords || await geocodeAddress(origin);
+      const destCoords = selectedDestinationCity?.coords || await geocodeAddress(destination);
 
       let route: RouteData = { distance: 0, duration: 0, geometry: null };
       try {
@@ -72,12 +137,12 @@ export default function Home() {
       if (!forecastRes.ok) throw new Error('Erro ao buscar previsão');
       const forecastData = await forecastRes.json();
 
-      // Filtrar apenas horários futuros (próximos 3 dias)
+      // Filtrar apenas horários futuros (próximos 2 dias)
       const now = new Date();
-      const threeDaysFromNow = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+      const twoDaysFromNow = new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000);
       const futureHourly = forecastData.hourly.filter((h: ForecastData) => {
         const hourTime = new Date(h.time);
-        return hourTime > now && hourTime <= threeDaysFromNow;
+        return hourTime > now && hourTime <= twoDaysFromNow;
       });
 
       if (futureHourly.length === 0) {
@@ -240,31 +305,59 @@ export default function Home() {
         <div className="bg-gradient-to-r from-slate-700 to-slate-600 rounded-lg shadow-2xl p-6 mb-8 border border-slate-500">
           <form onSubmit={calculateRoute}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-              <div>
+              <div className="relative">
                 <label className="block text-sm font-bold text-gray-200 mb-2">
                   📍 Ponto de Saída
                 </label>
                 <input
                   type="text"
                   value={origin}
-                  onChange={(e) => setOrigin(e.target.value)}
-                  placeholder="Ex: São Paulo"
+                  onChange={(e) => handleOriginChange(e.target.value)}
+                  placeholder="Ex: São Paulo, SP"
                   className="w-full px-4 py-3 bg-slate-800 border border-slate-600 rounded-lg text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
                   required
                 />
+                {originSuggestions.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg z-10">
+                    {originSuggestions.map((city, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => selectOriginCity(city)}
+                        className="w-full text-left px-4 py-2 hover:bg-slate-700 text-gray-200 first:rounded-t-lg last:rounded-b-lg"
+                      >
+                        {city.name} - <span className="text-gray-400">{city.state}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
-              <div>
+              <div className="relative">
                 <label className="block text-sm font-bold text-gray-200 mb-2">
                   🎯 Ponto de Chegada
                 </label>
                 <input
                   type="text"
                   value={destination}
-                  onChange={(e) => setDestination(e.target.value)}
-                  placeholder="Ex: Ilhabela"
+                  onChange={(e) => handleDestinationChange(e.target.value)}
+                  placeholder="Ex: Ilhabela, SP"
                   className="w-full px-4 py-3 bg-slate-800 border border-slate-600 rounded-lg text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
                   required
                 />
+                {destinationSuggestions.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg z-10">
+                    {destinationSuggestions.map((city, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => selectDestinationCity(city)}
+                        className="w-full text-left px-4 py-2 hover:bg-slate-700 text-gray-200 first:rounded-t-lg last:rounded-b-lg"
+                      >
+                        {city.name} - <span className="text-gray-400">{city.state}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
             <button
@@ -322,7 +415,7 @@ export default function Home() {
 
             {/* Previsão por hora */}
             <div className="bg-slate-700 rounded-lg shadow-2xl p-6 border border-slate-600">
-              <h3 className="text-2xl font-bold text-white mb-6">📊 Previsão por Hora (Próximos 3 Dias)</h3>
+              <h3 className="text-2xl font-bold text-white mb-6">📊 Previsão por Hora (Próximos 2 Dias)</h3>
               <div className="w-full h-80">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={routeInfo.forecast.map((d: ForecastData, idx: number) => ({
