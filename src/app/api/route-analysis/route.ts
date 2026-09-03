@@ -8,7 +8,7 @@ import {
   recommend,
   sweepDepartures,
 } from '@/lib/departureSweep';
-import { generateSmartRoutePoints, SmartRoutePoint } from '@/lib/smartWaypoints';
+import { generateSmartRoutePointsFromGeometry, SmartRoutePoint, GeoJSONGeometry } from '@/lib/smartWaypoints';
 
 interface RouteAnalysisResponse {
   origin: string;
@@ -134,12 +134,10 @@ export async function GET(request: NextRequest) {
     const [fromLat, fromLng] = from.split(',').map(Number);
     const [toLat, toLng] = to.split(',').map(Number);
 
-    // Gerar pontos inteligentes com amostragem adaptativa
-    const smartPoints = generateSmartRoutePoints(
-      [fromLat, fromLng],
-      [toLat, toLng],
-      route.distance,
-      findNearestCity
+    // Gerar pontos inteligentes usando a geometria real do OSRM
+    const smartPoints = generateSmartRoutePointsFromGeometry(
+      route.geometry as GeoJSONGeometry,
+      route.distance
     );
 
     // Calcular velocidade média para ETA
