@@ -19,7 +19,7 @@
 // - Detecta pista molhada mesmo sem chuva agora (histórico 1h-3h)
 // - Diferencia garoa (segura) de temporal (crítico)
 
-// Risk Score enhancement (v2.0) será integrado em próxima fase
+import { calculateMotorcycleRisk } from './motorcycleRiskScore';
 
 // ---------------------------------------------------------------------------
 // Tipos
@@ -210,32 +210,44 @@ function evaluateSegment(
   const visKm = (h.visibility[i] ?? 30_000) / 1000;
   const temp = h.temperature[i] ?? 20;
 
+  // Histórico de precipitação para detecção de pista molhada
+  const precipLast1h = i > 0 ? (h.precipitation[i - 1] ?? 0) : 0;
+  const precipLast3h = i > 2
+    ? ((h.precipitation[i - 3] ?? 0) + (h.precipitation[i - 2] ?? 0) + (h.precipitation[i - 1] ?? 0)) / 3
+    : 0;
+
+  // Usar novo Motorcycle Risk Score (35% chuva, 20% intensidade, 15% pista molhada, etc)
+  const { risk, components } = calculateMotorcycleRisk(
+    mm,
+    prob,
+    precipLast1h,
+    precipLast3h,
+    gust,
+    visKm,
+    temp
+  );
+
+  // Detectar hazards baseado nos componentes do risco
   const hazards: Hazard[] = [];
-  let risk = rainRisk(mm, prob);
-  if (risk > 0) hazards.push("chuva");
 
-  // Pista molhada sem estar chovendo: risco real, menor que chuva ativa.
-  const molhada = roadLikelyWet(h, i);
-  if (molhada) {
+  if (components.rainScore > 0) {
+    hazards.push("chuva");
+  }
+
+  if (components.roadWetnessScore > 30) {
     hazards.push("pista_molhada");
-    risk = Math.max(risk, 30);
   }
 
-  if (gust >= DANGEROUS_GUST_KMH) {
+  if (components.gustScore > 30) {
     hazards.push("rajada");
-    risk = Math.max(risk, 60);
   }
 
-  if (visKm < LOW_VISIBILITY_KM) {
+  if (components.visibilityScore > 30) {
     hazards.push("neblina");
-    // Neblina fechada é pior que chuva moderada para quem está de moto.
-    risk = Math.max(risk, 75);
   }
 
-  // Frio só vira risco combinado com molhado — seco a 10°C é desconforto, não perigo.
-  if (temp <= COLD_WET_C && (mm >= RAIN_BANDS_MM.moderada || molhada)) {
+  if (temp <= COLD_WET_C && (mm >= RAIN_BANDS_MM.moderada || components.roadWetnessScore > 0)) {
     hazards.push("frio_molhado");
-    risk = Math.max(risk, 55);
   }
 
   return {
@@ -247,7 +259,7 @@ function evaluateSegment(
     windGustKmh: gust,
     visibilityKm: visKm,
     temperatureC: temp,
-    risk: Math.round(risk),
+    risk,
     hazards,
   };
 }
