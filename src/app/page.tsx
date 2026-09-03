@@ -212,10 +212,10 @@ export default function Home() {
         currentTemp: forecastData.currentTemp,
       });
 
-      // Buscar análise detalhada da rota (pontos intermediários)
+      // Buscar análise de múltiplas partidas (curva de risco × hora)
       try {
         const analysisRes = await fetch(
-          `/api/route-analysis?from=${originCoords}&to=${destCoords}&departure_time=${new Date().toISOString()}`
+          `/api/route-analysis?from=${originCoords}&to=${destCoords}`
         );
         if (analysisRes.ok) {
           const analysis = await analysisRes.json();
@@ -432,117 +432,95 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Recomendação Inteligente baseada na análise de rota */}
-              {routeAnalysis && routeAnalysis.riskAnalysis && (
+              {/* Recomendação Inteligente com varredura de múltiplas partidas */}
+              {routeAnalysis && routeAnalysis.recommendation && (
                 <div className={`rounded-lg p-4 border-l-4 ${
-                  routeAnalysis.riskAnalysis.overallRiskLevel === 'baixo'
-                    ? 'border-green-500 bg-slate-800 bg-opacity-80'
-                    : routeAnalysis.riskAnalysis.overallRiskLevel === 'moderado'
-                      ? 'border-yellow-500 bg-slate-800 bg-opacity-80'
-                      : 'border-red-500 bg-slate-800 bg-opacity-80'
+                  routeAnalysis.recommendation.noDryOption
+                    ? 'border-red-500 bg-slate-800 bg-opacity-80'
+                    : 'border-green-500 bg-slate-800 bg-opacity-80'
                 }`}>
-                  <p className="text-gray-300 text-sm font-semibold mb-2">💡 Recomendação Inteligente (Baseada em Toda a Rota)</p>
-                  {routeAnalysis.riskAnalysis.safestTimeRange ? (
+                  <p className="text-gray-300 text-sm font-semibold mb-2">💡 Recomendação Inteligente (Múltiplos Horários)</p>
+                  {routeAnalysis.recommendation.best && (
                     <p className="text-white font-bold">
-                      ✅ Saia entre <span className="text-green-300">{routeAnalysis.riskAnalysis.safestTimeRange}</span> para evitar chuva em TODA a rota
-                    </p>
-                  ) : (
-                    <p className="text-white font-bold">
-                      ⚠️ Há risco de chuva em algum ponto da rota
+                      ✅ Melhor partida: <span className="text-green-300">
+                        {new Date(routeAnalysis.recommendation.best.departure).toLocaleTimeString('pt-BR', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </span> (risco {routeAnalysis.recommendation.best.score})
                     </p>
                   )}
-                  {routeAnalysis.riskAnalysis.highestRiskPeriod && (
+                  {routeAnalysis.recommendation.safeWindow && (
                     <p className="text-gray-300 text-sm mt-2">
-                      ❌ Evite sair entre {routeAnalysis.riskAnalysis.highestRiskPeriod} (maior chance de chuva)
+                      🟢 Janela segura: {new Date(routeAnalysis.recommendation.safeWindow.start).toLocaleTimeString('pt-BR', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })} às {new Date(routeAnalysis.recommendation.safeWindow.end).toLocaleTimeString('pt-BR', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </p>
+                  )}
+                  {routeAnalysis.recommendation.avoidWindow && (
+                    <p className="text-gray-300 text-sm">
+                      🔴 Evite sair: {new Date(routeAnalysis.recommendation.avoidWindow.start).toLocaleTimeString('pt-BR', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })} às {new Date(routeAnalysis.recommendation.avoidWindow.end).toLocaleTimeString('pt-BR', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </p>
+                  )}
+                  {routeAnalysis.recommendation.noDryOption && (
+                    <p className="text-yellow-300 text-sm mt-2">
+                      ⚠️ Sem opção seca — escolha a menos ruim
                     </p>
                   )}
                 </div>
               )}
             </div>
 
-            {/* Previsão por hora com marcação de pontos da rota */}
+            {/* Gráfico de risco × hora de partida (varredura de múltiplos horários) */}
             <div className="bg-slate-700 rounded-lg shadow-2xl p-6 border border-slate-600">
-              <h3 className="text-2xl font-bold text-white mb-6">📊 Previsão por Hora (Próximos 12 hs) + Rota</h3>
+              <h3 className="text-2xl font-bold text-white mb-6">📈 Risco da Viagem × Hora de Partida</h3>
               <div className="w-full h-96">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={routeInfo.forecast.map((d: ForecastData, idx: number) => ({
-                    ...d,
-                    displayDate: new Date(d.time).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
-                  }))}>
+                  <AreaChart data={routeAnalysis && routeAnalysis.options ? routeAnalysis.options.map((opt: any) => ({
+                    time: new Date(opt.departure).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+                    score: opt.score,
+                    wetMinutes: opt.wetMinutes,
+                    departure: opt.departure,
+                  })) : []}>
                     <defs>
-                      <linearGradient id="colorPrecip" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#ef4444" stopOpacity={0.8}/>
-                        <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
+                      <linearGradient id="colorScore" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
+                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="#475569" vertical={false} />
 
-                    {/* Linhas de separação entre dias */}
-                    {routeInfo.forecast.map((d: ForecastData, idx: number) => {
-                      const date = new Date(d.time);
-                      if (date.getHours() === 0 && idx > 0) {
-                        return <ReferenceLine key={idx} x={d.time} stroke="#64748b" strokeDasharray="5 5" />;
-                      }
-                      return null;
-                    })}
-
-                    {/* Linhas mostrando quando você passa em cada ponto da rota */}
-                    {routeAnalysis && routeAnalysis.points && routeAnalysis.points.slice(0, 5).map((point: any, idx: number) => {
-                      const pointTime = new Date();
-                      const [arrivalHour, arrivalMinute] = point.estimatedArrivalTime.split(':').map(Number);
-                      pointTime.setHours(arrivalHour, arrivalMinute, 0);
-
-                      // Verificar se essa hora está dentro do forecast
-                      const isInForecast = routeInfo.forecast.some((f: ForecastData) => {
-                        const fTime = new Date(f.time);
-                        return Math.abs(fTime.getTime() - pointTime.getTime()) < 60 * 60 * 1000; // dentro de 1 hora
-                      });
-
-                      if (isInForecast) {
-                        return (
-                          <ReferenceLine
-                            key={`point-${idx}`}
-                            x={pointTime.toISOString()}
-                            stroke="#60a5fa"
-                            strokeDasharray="3 3"
-                            strokeWidth={2}
-                            label={{
-                              value: `📍 ${point.city || `Pt${idx + 1}`} (${point.distance}km)`,
-                              position: 'top',
-                              fill: '#60a5fa',
-                              fontSize: 12,
-                            }}
-                          />
-                        );
-                      }
-                      return null;
-                    })}
+                    {/* Marcar janelas recomendadas */}
+                    {routeAnalysis && routeAnalysis.recommendation && routeAnalysis.recommendation.safeWindow && (
+                      <ReferenceLine
+                        x={new Date(routeAnalysis.recommendation.recommendation.safeWindow.start).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                        stroke="#22c55e"
+                        strokeDasharray="5 5"
+                        strokeWidth={2}
+                        label={{ value: 'Janela segura', fill: '#22c55e', fontSize: 11, position: 'top' }}
+                      />
+                    )}
                     <XAxis
                       dataKey="time"
                       stroke="#94a3b8"
-                      tick={{ fontSize: 11, fill: '#cbd5e1' }}
+                      tick={{ fontSize: 10, fill: '#cbd5e1' }}
                       angle={-45}
                       textAnchor="end"
-                      height={80}
-                      tickFormatter={(time) => {
-                        const date = new Date(time);
-                        const hour = date.toLocaleTimeString('pt-BR', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                          hour12: false,
-                        });
-                        // Mostrar data a cada 6 horas para não ficar muito poluído
-                        const minutes = date.getHours() % 6 === 0 ? date.getMinutes() : 0;
-                        if (minutes === 0 && date.getHours() % 6 === 0) {
-                          const day = date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-                          return `${day}\n${hour}`;
-                        }
-                        return hour;
-                      }}
+                      height={60}
                     />
                     <YAxis
                       stroke="#94a3b8"
-                      label={{ value: 'Chance de Chuva (%)', angle: -90, position: 'insideLeft' }}
+                      label={{ value: 'Risco da Viagem (0-100)', angle: -90, position: 'insideLeft' }}
                       tick={{ fontSize: 12 }}
                       domain={[0, 100]}
                     />
@@ -554,95 +532,112 @@ export default function Home() {
                         color: '#fff',
                         padding: '12px',
                       }}
-                      formatter={(value: any) => {
-                        if (value > 50) return [`${value}% 🌧️ Chuva forte`, 'Precipitação'];
-                        if (value > 30) return [`${value}% 🌧️ Chuva`, 'Precipitação'];
-                        if (value > 20) return [`${value}% 💧 Possível chuva`, 'Precipitação'];
-                        if (value > 0) return [`${value}% ☁️ Pequena chance`, 'Precipitação'];
-                        return [`${value}% ☀️ Sem chuva`, 'Precipitação'];
+                      formatter={(value: any, name: string) => {
+                        if (name === 'score') {
+                          let label = '';
+                          if (value <= 20) label = '✅ Seguro';
+                          else if (value <= 55) label = '⚠️ Moderado';
+                          else label = '🔴 Alto risco';
+                          return [`${value} ${label}`, 'Risco'];
+                        }
+                        if (name === 'wetMinutes') {
+                          return [`${value} min`, 'Tempo molhado'];
+                        }
+                        return [value, name];
                       }}
                       labelFormatter={(label) => {
-                        const date = new Date(label);
-                        const day = date.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
-                        const time = date.toLocaleTimeString('pt-BR', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                          hour12: false,
-                        });
-                        return `${day} às ${time}`;
+                        return `Partida: ${label}`;
                       }}
                     />
                     <Area
                       type="monotone"
-                      dataKey="precipitation_probability"
-                      stroke="#ef4444"
+                      dataKey="score"
+                      stroke="#3b82f6"
                       strokeWidth={2}
                       fillOpacity={1}
-                      fill="url(#colorPrecip)"
+                      fill="url(#colorScore)"
                     />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
-            {/* Análise detalhada da rota (pontos intermediários) */}
-            {routeAnalysis && routeAnalysis.points && routeAnalysis.points.length > 0 && (
+            {/* Análise detalhada da rota (pontos intermediários - usando melhor partida) */}
+            {routeAnalysis && routeAnalysis.recommendation && routeAnalysis.recommendation.best && routeAnalysis.recommendation.best.segments && routeAnalysis.recommendation.best.segments.length > 0 && (
               <div className="bg-slate-700 rounded-lg shadow-2xl p-6 border border-slate-600">
                 <h3 className="text-2xl font-bold text-white mb-6">🛣️ Análise Detalhada da Rota</h3>
 
-                {/* Resumo de Risco */}
+                {/* Resumo da melhor partida */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                   <div className="bg-slate-800 rounded-lg p-4 border border-slate-600">
-                    <p className="text-gray-400 text-sm mb-2">☀️ Melhor Período</p>
-                    <p className="text-white font-bold text-lg">{routeAnalysis.riskAnalysis.safestTimeRange || 'Consultando dados...'}</p>
+                    <p className="text-gray-400 text-sm mb-2">⏰ Melhor Partida</p>
+                    <p className="text-white font-bold text-lg">
+                      {new Date(routeAnalysis.recommendation.best.departure).toLocaleTimeString('pt-BR', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </p>
                   </div>
                   <div className="bg-slate-800 rounded-lg p-4 border border-slate-600">
-                    <p className="text-gray-400 text-sm mb-2">🌧️ Período de Maior Risco</p>
-                    <p className="text-white font-bold text-lg">{routeAnalysis.riskAnalysis.highestRiskPeriod || 'Nenhum'}</p>
+                    <p className="text-gray-400 text-sm mb-2">📈 Risco Total</p>
+                    <p className={`font-bold text-lg ${
+                      routeAnalysis.recommendation.best.score <= 20 ? 'text-green-400' :
+                      routeAnalysis.recommendation.best.score <= 55 ? 'text-yellow-400' :
+                      'text-red-400'
+                    }`}>
+                      {routeAnalysis.recommendation.best.score}
+                    </p>
                   </div>
                 </div>
 
                 {/* Timeline dos Pontos */}
                 <div className="space-y-3">
-                  {routeAnalysis.points.map((point: any, idx: number) => {
-                    const riskColor = point.weather?.willRain
+                  {routeAnalysis.recommendation.best.segments.map((segment: any, idx: number) => {
+                    const riskColor = segment.risk > 55
                       ? 'border-l-4 border-red-500 bg-red-900 bg-opacity-20'
-                      : 'border-l-4 border-green-500 bg-green-900 bg-opacity-20';
+                      : segment.risk > 20
+                        ? 'border-l-4 border-yellow-500 bg-yellow-900 bg-opacity-20'
+                        : 'border-l-4 border-green-500 bg-green-900 bg-opacity-20';
 
                     return (
                       <div key={idx} className={`rounded-lg p-4 ${riskColor} flex items-center justify-between`}>
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-2">
-                            <span className="text-white font-bold">{point.distance}km</span>
-                            {point.city && (
-                              <span className="text-gray-300">
-                                📍 {point.city}, {point.state}
-                              </span>
-                            )}
+                            <span className="text-white font-bold">{segment.waypoint.distanceFromStartKm.toFixed(0)}km</span>
+                            <span className="text-gray-300">
+                              📍 {segment.waypoint.label}
+                            </span>
                           </div>
-                          <div className="grid grid-cols-3 gap-4 text-sm">
+                          <div className="grid grid-cols-4 gap-4 text-sm">
                             <div>
                               <p className="text-gray-400">⏰ ETA</p>
-                              <p className="text-white font-semibold">{point.estimatedArrivalTime}</p>
+                              <p className="text-white font-semibold">
+                                {new Date(segment.eta).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                              </p>
                             </div>
-                            {point.weather && (
-                              <>
-                                <div>
-                                  <p className="text-gray-400">🌡️ Temp</p>
-                                  <p className="text-white font-semibold">{point.weather.temp.toFixed(1)}°C</p>
-                                </div>
-                                <div>
-                                  <p className="text-gray-400">💧 Chuva</p>
-                                  <p className={`font-semibold ${point.weather.willRain ? 'text-red-400' : 'text-green-400'}`}>
-                                    {point.weather.precipitation_probability}%
-                                  </p>
-                                </div>
-                              </>
-                            )}
+                            <div>
+                              <p className="text-gray-400">🌡️ Temp</p>
+                              <p className="text-white font-semibold">{segment.temperatureC.toFixed(1)}°C</p>
+                            </div>
+                            <div>
+                              <p className="text-gray-400">💧 Chuva</p>
+                              <p className={`font-semibold ${segment.precipitationMm > 0.5 ? 'text-red-400' : 'text-green-400'}`}>
+                                {segment.precipitationMm.toFixed(1)}mm
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-gray-400">⚠️ Risco</p>
+                              <p className="text-white font-semibold">{segment.risk}</p>
+                            </div>
                           </div>
+                          {segment.hazards && segment.hazards.length > 0 && (
+                            <p className="text-gray-300 text-xs mt-2">
+                              Riscos: {segment.hazards.join(', ')}
+                            </p>
+                          )}
                         </div>
                         <div className="text-3xl ml-4">
-                          {point.weather?.willRain ? '🌧️' : '☀️'}
+                          {segment.risk > 55 ? '🔴' : segment.risk > 20 ? '🟡' : '🟢'}
                         </div>
                       </div>
                     );
