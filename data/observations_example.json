@@ -1,0 +1,100 @@
+[
+  {
+    "date": "2026-09-08",
+    "departure": "06:00",
+    "route": {
+      "from": "São José dos Campos",
+      "to": "Ilhabela"
+    },
+    "forecast": {
+      "score": 0,
+      "hazards": [],
+      "safeWindow": "06:00 - 09:00"
+    },
+    "observation": {
+      "rained": false,
+      "intensity": null,
+      "duration_min": 0,
+      "wet_road": false,
+      "visibility": "excelente",
+      "wind_gust_kmh": 15,
+      "temperature": 24,
+      "incidents": "nenhum"
+    },
+    "validation": "✅"
+  },
+  {
+    "date": "2026-09-09",
+    "departure": "10:30",
+    "route": {
+      "from": "São José dos Campos",
+      "to": "Ilhabela"
+    },
+    "forecast": {
+      "score": 63,
+      "hazards": ["chuva", "neblina"],
+      "avoidWindow": "10:00 - 14:00"
+    },
+    "observation": {
+      "rained": true,
+      "intensity": "moderada",
+      "duration_min": 45,
+      "wet_road": true,
+      "visibility": "reduzida",
+      "wind_gust_kmh": 28,
+      "temperature": 18,
+      "incidents": "nenhum"
+    },
+    "validation": "✅"
+  },
+  {
+    "date": "2026-09-10",
+    "departure": "13:00",
+    "route": {
+      "from": "São José dos Campos",
+      "to": "Ilhabela"
+    },
+    "forecast": {
+      "score": 69,
+      "hazards": ["chuva", "pista_molhada", "neblina"],
+      "avoidWindow": "12:00 - 15:00"
+    },
+    "observation": {
+      "rained": false,
+      "intensity": null,
+      "duration_min": 0,
+      "wet_road": false,
+      "visibility": "boa",
+      "wind_gust_kmh": 18,
+      "temperature": 22,
+      "incidents": "nenhum"
+    },
+    "validation": "❌",
+    "reason": "Falso positivo — app foi conservador, mas viagem foi tranquila"
+  },
+  {
+    "date": "2026-09-11",
+    "departure": "17:30",
+    "route": {
+      "from": "São José dos Campos",
+      "to": "Ilhabela"
+    },
+    "forecast": {
+      "score": 25,
+      "hazards": ["pista_molhada"],
+      "safeWindow": "17:00 - 19:00"
+    },
+    "observation": {
+      "rained": true,
+      "intensity": "forte",
+      "duration_min": 30,
+      "wet_road": true,
+      "visibility": "reduzida",
+      "wind_gust_kmh": 38,
+      "temperature": 17,
+      "incidents": "aquaplanagem_leve"
+    },
+    "validation": "❌",
+    "reason": "Falso negativo — chuva forte não foi prevista, score deveria ser > 55"
+  }
+]
