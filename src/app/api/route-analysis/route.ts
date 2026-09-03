@@ -8,6 +8,7 @@ import {
   recommend,
   sweepDepartures,
 } from '@/lib/departureSweep';
+import { generateSmartRoutePoints, SmartRoutePoint } from '@/lib/smartWaypoints';
 
 interface RouteAnalysisResponse {
   origin: string;
@@ -79,27 +80,17 @@ async function getWeatherForecast(lat: number, lng: number): Promise<HourlySerie
   }
 }
 
-function interpolateCoordinates(
-  start: [number, number],
-  end: [number, number],
-  distanceKm: number,
-  interval: number = 50 // a cada 50km
-): Array<{ lat: number; lng: number; distance: number }> {
-  const points: Array<{ lat: number; lng: number; distance: number }> = [];
-  const numPoints = Math.floor(distanceKm / interval);
-
-  for (let i = 1; i <= numPoints; i++) {
-    const ratio = (i * interval) / distanceKm;
-    const lat = start[0] + (end[0] - start[0]) * ratio;
-    const lng = start[1] + (end[1] - start[1]) * ratio;
-    points.push({
-      lat,
-      lng,
-      distance: i * interval,
-    });
-  }
-
-  return points;
+/**
+ * Converte SmartRoutePoint para Waypoint (formato esperado pelo departureSweep)
+ */
+function smartPointToWaypoint(point: SmartRoutePoint, avgSpeedKmH: number): Waypoint {
+  return {
+    label: `Km ${point.distanceFromStartKm.toFixed(0)}`,
+    lat: point.lat,
+    lng: point.lng,
+    distanceFromStartKm: point.distanceFromStartKm,
+    travelMinutesFromStart: point.etaMinutes,
+  };
 }
 
 function findNearestCity(
@@ -143,21 +134,26 @@ export async function GET(request: NextRequest) {
     const [fromLat, fromLng] = from.split(',').map(Number);
     const [toLat, toLng] = to.split(',').map(Number);
 
-    // Interpolar pontos a cada 50km
-    const interpolatedPoints = interpolateCoordinates([fromLat, fromLng], [toLat, toLng], route.distance);
+    // Gerar pontos inteligentes com amostragem adaptativa
+    const smartPoints = generateSmartRoutePoints(
+      [fromLat, fromLng],
+      [toLat, toLng],
+      route.distance,
+      findNearestCity
+    );
 
-    // Calcular tempo entre pontos para preencher travelMinutesFromStart
+    // Calcular velocidade média para ETA
     const avgSpeedKmH = route.distance / (route.duration / 3600);
 
-    // Montar waypoints com duração acumulada
-    const waypoints: Waypoint[] = interpolatedPoints.map((point, idx) => {
+    // Converter SmartRoutePoints para Waypoints (compatível com departureSweep)
+    const waypoints: Waypoint[] = smartPoints.map((point) => {
       const nearestCity = findNearestCity(point.lat, point.lng);
       return {
-        label: nearestCity ? `${nearestCity.name}, ${nearestCity.state}` : `Ponto ${idx + 1}`,
+        label: nearestCity ? `${nearestCity.name}, ${nearestCity.state}` : `Km ${point.distanceFromStartKm.toFixed(0)}`,
         lat: point.lat,
         lng: point.lng,
-        distanceFromStartKm: point.distance,
-        travelMinutesFromStart: Math.round((point.distance / avgSpeedKmH) * 60),
+        distanceFromStartKm: point.distanceFromStartKm,
+        travelMinutesFromStart: point.etaMinutes,
       };
     });
 

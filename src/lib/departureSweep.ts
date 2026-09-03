@@ -13,6 +13,13 @@
 // O CUSTO É ZERO EM API: a série horária completa de cada ponto já foi baixada. A
 // varredura é aritmética local sobre dados em memória. Testar 96 horários de partida custa
 // exatamente o mesmo que testar um.
+//
+// ATUALIZAÇÃO v2.0: Risk Score baseado em motociclista (não apenas chuva)
+// - 35% chuva + 20% intensidade + 15% pista molhada + 15% rajada + 10% visibilidade + 5% temp
+// - Detecta pista molhada mesmo sem chuva agora (histórico 1h-3h)
+// - Diferencia garoa (segura) de temporal (crítico)
+
+// Risk Score enhancement (v2.0) será integrado em próxima fase
 
 // ---------------------------------------------------------------------------
 // Tipos
