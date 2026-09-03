@@ -1,32 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-interface RoutePoint {
-  index: number;
-  distance: number;
-  latitude: number;
-  longitude: number;
-  city?: string;
-  state?: string;
-  estimatedArrivalTime?: string;
-  weather?: {
-    temp: number;
-    precipitation_probability: number;
-    willRain: boolean;
-  };
-}
+import {
+  DepartureOption,
+  HourlySeries,
+  Recommendation,
+  Waypoint,
+  WaypointForecast,
+  recommend,
+  sweepDepartures,
+} from '@/lib/departureSweep';
 
 interface RouteAnalysisResponse {
   origin: string;
   destination: string;
   totalDistance: number;
   totalDuration: number;
-  points: RoutePoint[];
-  riskAnalysis: {
-    safestTimeRange: string;
-    highestRiskPeriod: string;
-    overallRiskLevel: string;
-    rainyPoints: number;
-  };
+  // Curva de risco × hora de partida
+  options: DepartureOption[];
+  // Recomendação extraída da curva
+  recommendation: Recommendation;
 }
 
 // Banco de dados de cidades com coordenadas
@@ -62,26 +53,24 @@ async function fetchOSRMRoute(from: string, to: string) {
   };
 }
 
-async function getWeatherForecast(lat: number, lng: number) {
+async function getWeatherForecast(lat: number, lng: number): Promise<HourlySeries | null> {
   try {
     const response = await fetch(
-      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&hourly=precipitation_probability,temperature_2m`
+      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&hourly=precipitation,precipitation_probability,temperature_2m,wind_gusts_10m,visibility&timezone=auto`
     );
     const data = await response.json();
 
     if (!data.hourly) return null;
 
-    const now = new Date();
-    const futureData = data.hourly.time
-      .map((time: string, idx: number) => ({
-        time,
-        temp: data.hourly.temperature_2m[idx],
-        precipitation_probability: data.hourly.precipitation_probability[idx],
-      }))
-      .filter((h: any) => new Date(h.time) > now)
-      .slice(0, 48); // Próximas 48 horas
-
-    return futureData;
+    // Retorna série completa; quem chamar é responsável por recortar horizonte
+    return {
+      time: data.hourly.time,
+      precipitation: data.hourly.precipitation ?? [],
+      precipitationProbability: data.hourly.precipitation_probability ?? [],
+      windGusts: data.hourly.wind_gusts_10m ?? [],
+      visibility: data.hourly.visibility ?? [],
+      temperature: data.hourly.temperature_2m ?? [],
+    };
   } catch (error) {
     console.error('Erro ao buscar previsão:', error);
     return null;
@@ -134,33 +123,10 @@ function findNearestCity(
   return nearest;
 }
 
-function getWeatherAtTime(
-  forecastData: any[],
-  estimatedTime: Date
-): { temp: number; precipitation_probability: number; willRain: boolean } | null {
-  const targetHour = estimatedTime.getHours();
-  const targetDate = estimatedTime.toISOString().split('T')[0];
-
-  const weatherPoint = forecastData.find((w: any) => {
-    const wDate = w.time.split('T')[0];
-    const wHour = new Date(w.time).getHours();
-    return wDate === targetDate && wHour === targetHour;
-  });
-
-  if (!weatherPoint) return null;
-
-  return {
-    temp: weatherPoint.temp,
-    precipitation_probability: weatherPoint.precipitation_probability,
-    willRain: weatherPoint.precipitation_probability > 30,
-  };
-}
-
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const from = searchParams.get('from');
   const to = searchParams.get('to');
-  const departureTime = searchParams.get('departure_time') || new Date().toISOString();
 
   if (!from || !to) {
     return NextResponse.json(
@@ -178,88 +144,50 @@ export async function GET(request: NextRequest) {
     // Interpolar pontos a cada 50km
     const interpolatedPoints = interpolateCoordinates([fromLat, fromLng], [toLat, toLng], route.distance);
 
-    // Buscar previsão do tempo para o ponto de origem
-    const originForecast = await getWeatherForecast(fromLat, fromLng);
+    // Calcular tempo entre pontos para preencher travelMinutesFromStart
+    const avgSpeedKmH = route.distance / (route.duration / 3600);
 
-    // Processar cada ponto
-    const analysisPoints: RoutePoint[] = [];
-    let rainyPoints = 0;
-
-    const departureDate = new Date(departureTime);
-    const averageSpeed = route.distance / (route.duration / 3600); // km/h
-
-    for (let i = 0; i < interpolatedPoints.length; i++) {
-      const point = interpolatedPoints[i];
-
-      // Calcular tempo estimado de chegada
-      const hoursToPoint = point.distance / averageSpeed;
-      const estimatedArrival = new Date(departureDate.getTime() + hoursToPoint * 60 * 60 * 1000);
-
-      // Encontrar cidade mais próxima
+    // Montar waypoints com duração acumulada
+    const waypoints: Waypoint[] = interpolatedPoints.map((point, idx) => {
       const nearestCity = findNearestCity(point.lat, point.lng);
+      return {
+        label: nearestCity ? `${nearestCity.name}, ${nearestCity.state}` : `Ponto ${idx + 1}`,
+        lat: point.lat,
+        lng: point.lng,
+        distanceFromStartKm: point.distance,
+        travelMinutesFromStart: Math.round((point.distance / avgSpeedKmH) * 60),
+      };
+    });
 
-      // Buscar previsão para este ponto
-      let weatherAtPoint = null;
-      if (originForecast) {
-        weatherAtPoint = getWeatherAtTime(originForecast, estimatedArrival);
-      }
+    // Buscar previsão para cada waypoint
+    const forecasts: WaypointForecast[] = await Promise.all(
+      waypoints.map(async (wp) => {
+        const hourly = await getWeatherForecast(wp.lat, wp.lng);
+        return {
+          waypoint: wp,
+          hourly: hourly || emptyHourlySeries(),
+        };
+      })
+    );
 
-      if (weatherAtPoint?.willRain) {
-        rainyPoints++;
-      }
+    // Varrer horários de partida (próximas 48h, a cada 30 min)
+    const now = new Date();
+    const options = sweepDepartures(forecasts, {
+      from: now,
+      horizonHours: 48,
+      stepMinutes: 30,
+    });
 
-      analysisPoints.push({
-        index: i + 1,
-        distance: point.distance,
-        latitude: point.lat,
-        longitude: point.lng,
-        city: nearestCity?.name,
-        state: nearestCity?.state,
-        estimatedArrivalTime: estimatedArrival.toLocaleTimeString('pt-BR', {
-          hour: '2-digit',
-          minute: '2-digit',
-        }),
-        weather: weatherAtPoint || undefined,
-      });
-    }
-
-    // Análise de risco
-    let safestTimeRange = '';
-    let highestRiskPeriod = '';
-    let overallRiskLevel = 'baixo';
-
-    if (originForecast && originForecast.length > 0) {
-      const next24h = originForecast.slice(0, 24);
-      const dryPeriods = next24h.filter((h: any) => h.precipitation_probability < 30);
-      const wetPeriods = next24h.filter((h: any) => h.precipitation_probability > 50);
-
-      if (dryPeriods.length > 0) {
-        safestTimeRange = `${new Date(dryPeriods[0].time).getHours()}:00 - ${new Date(dryPeriods[dryPeriods.length - 1].time).getHours()}:00`;
-      }
-
-      if (wetPeriods.length > 0) {
-        highestRiskPeriod = `${new Date(wetPeriods[0].time).getHours()}:00 - ${new Date(wetPeriods[wetPeriods.length - 1].time).getHours()}:00`;
-      }
-
-      const rainPercentage = (rainyPoints / analysisPoints.length) * 100;
-      if (rainPercentage === 0) overallRiskLevel = 'baixo';
-      else if (rainPercentage < 30) overallRiskLevel = 'moderado';
-      else if (rainPercentage < 70) overallRiskLevel = 'alto';
-      else overallRiskLevel = 'crítico';
-    }
+    // Gerar recomendação
+    const rec = recommend(options);
 
     const response: RouteAnalysisResponse = {
       origin: from,
       destination: to,
       totalDistance: Math.round(route.distance * 10) / 10,
       totalDuration: Math.round(route.duration),
-      points: analysisPoints,
-      riskAnalysis: {
-        safestTimeRange,
-        highestRiskPeriod,
-        overallRiskLevel,
-        rainyPoints,
-      },
+      options,
+      recommendation: rec,
     };
 
     return NextResponse.json(response);
@@ -270,4 +198,15 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+function emptyHourlySeries(): HourlySeries {
+  return {
+    time: [],
+    precipitation: [],
+    precipitationProbability: [],
+    windGusts: [],
+    visibility: [],
+    temperature: [],
+  };
 }
