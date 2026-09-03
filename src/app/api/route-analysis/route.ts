@@ -30,6 +30,8 @@ const CITIES_DB: { [key: string]: { lat: number; lng: number; state: string } } 
   'ilhabela': { lat: -23.8633, lng: -45.3562, state: 'SP' },
   'campinas': { lat: -22.9068, lng: -47.4616, state: 'SP' },
   'santos': { lat: -23.9608, lng: -46.3304, state: 'SP' },
+  'florianópolis': { lat: -27.5954, lng: -48.5477, state: 'SC' },
+  'são paulo': { lat: -23.5505, lng: -46.6333, state: 'SP' },
 };
 
 async function fetchOSRMRoute(from: string, to: string) {
